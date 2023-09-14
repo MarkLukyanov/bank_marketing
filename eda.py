@@ -119,7 +119,7 @@ def make_matrices() -> tuple[DataFrame, DataFrame, Any, Any]:
     return X_train_transformed, X_val_transformed, y_train, y_val
 
 
-def show_metrics(model: sklearn.linear_model._logistic.LogisticRegression, limit: float, df: pd.DataFrame) -> str:
+def show_metrics(model, limit: float, df: pd.DataFrame) -> str:
     text = ""
 
     X_train_transformed, X_val_transformed, y_train, y_val = make_matrices()
