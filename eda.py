@@ -1,6 +1,14 @@
+from typing import Tuple, Any
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from pandas import DataFrame
+from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.model_selection import train_test_split
+import sklearn
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 
 def open_data(path: str = "data/clients_clean.csv") -> pd.DataFrame:
@@ -29,7 +37,6 @@ def explore_numerical(df: pd.DataFrame) -> plt.figure:
     axs[2, 2].hist(df["LOAN_NUM_CLOSED"], bins=50)
     axs[2, 2].set_title("Количество закрытых кредитов")
 
-
     for ax in axs.flat:
         ax.set(ylabel='Количество')
 
@@ -46,6 +53,13 @@ def show_correlation(df: pd.DataFrame) -> plt.figure:
 def show_dependance_on_target(df: pd.DataFrame, name: str) -> plt.figure:
     fig, ax = plt.subplots(figsize=(5, 5))
     sns.scatterplot(x=df[name], y=df.TARGET, ax=ax)
+
+    return fig
+
+
+def show_double_hist(df: pd.DataFrame) -> plt.figure:
+    fig, ax = plt.subplots(figsize=(5, 5))
+    sns.histplot(data=df, x=df.CREDIT, hue='TARGET', kde=True)
 
     return fig
 
@@ -72,3 +86,58 @@ def explore_categorical(df: pd.DataFrame) -> str:
         text += f"{el}: {df.MARITAL_STATUS.value_counts()[el]}  \n"
 
     return text
+
+
+def make_matrices() -> tuple[DataFrame, DataFrame, Any, Any]:
+
+    df = pd.read_csv("data/clients_clean.csv")
+
+    X = df.drop(['TARGET', 'AGREEMENT_RK'], axis=1)
+    y = df['TARGET']
+
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.25, random_state=42)
+
+    categorical = ['FAMILY_INCOME', 'EDUCATION', 'MARITAL_STATUS']
+    numeric_features = ['WORK_TIME', 'PERSONAL_INCOME', 'CREDIT', "TERM", "FST_PAYMENT",
+                        "AGE", "GENDER", "CHILD_TOTAL", "DEPENDANTS", "SOCSTATUS_WORK_FL",
+                        "SOCSTATUS_PENS_FL", "OWN_AUTO", "LOAN_NUM_TOTAL", "LOAN_NUM_CLOSED"]
+
+    ct = ColumnTransformer([
+        ('ohe', OneHotEncoder(handle_unknown="ignore"), categorical),
+        ('scaling', MinMaxScaler(), numeric_features)
+    ])
+
+    X_train_transformed = ct.fit_transform(X_train)
+    X_val_transformed = ct.transform(X_val)
+
+    new_features = list(ct.named_transformers_['ohe'].get_feature_names_out())
+    new_features.extend(numeric_features)
+
+    X_train_transformed = pd.DataFrame(X_train_transformed, columns=new_features)
+    X_val_transformed = pd.DataFrame(X_val_transformed, columns=new_features)
+
+    return X_train_transformed, X_val_transformed, y_train, y_val
+
+
+def show_metrics(model: sklearn.linear_model._logistic.LogisticRegression, limit: float, df: pd.DataFrame) -> str:
+    text = ""
+
+    X_train_transformed, X_val_transformed, y_train, y_val = make_matrices()
+
+    model.fit(X_train_transformed, y_train)
+    pred_test = model.predict(X_val_transformed)
+
+    probs = model.predict_proba(X_val_transformed)
+    probs_churn = probs[:, 1]
+
+    classes = probs_churn > limit
+
+    text += f"\nAccuracy: {accuracy_score(y_val, classes)}\n"
+    text += f"\nPrecision: {precision_score(y_val, classes)}\n"
+    text += f"\nRecall: {recall_score(y_val, classes)}\n"
+    text += f"\nf1: {f1_score(y_val, classes)}\n"
+
+    return text
+
+
+
